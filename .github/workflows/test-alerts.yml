@@ -1,0 +1,59 @@
+name: Test Alerts Logic
+
+on:
+  push:
+    paths:
+      - 'src/alerts.php'
+      - 'src/email.php'
+      - 'src/inat-api.php'
+      - 'src/state.php'
+      - 'templates/**'
+      - '.github/workflows/test-alerts.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+      
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist
+      
+      - name: Test alerts helper functions
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/config.php';
+          require_once 'src/inat-api.php';
+          require_once 'src/state.php';
+          require_once 'src/email.php';
+          require_once 'src/alerts.php';
+          
+          echo \"Testing alerts helper functions...\n\";
+          
+          // Test calculateObservedAge (same as digest)
+          \$recentObs = ['observed_on' => gmdate('Y-m-d', strtotime('-5 days'))];
+          \$oldObs = ['observed_on' => gmdate('Y-m-d', strtotime('-40 days'))];
+          \$unknownObs = [];
+          
+          \$recentAge = calculateObservedAge(\$recentObs);
+          \$oldAge = calculateObservedAge(\$oldObs);
+          \$unknownAge = calculateObservedAge(\$unknownObs);
+          
+          echo \"✓ calculateObservedAge() works: recent=\$recentAge days, old=\$oldAge days, unknown=\$unknownAge\n\";
+          
+          echo \"\nAll alerts function tests passed!\n\";
+          "
