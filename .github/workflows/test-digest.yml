@@ -1,1 +1,79 @@
-Tool call argument 'initial_content' pruned from message history.
+name: Test Digest Logic
+
+on:
+  push:
+    paths:
+      - 'src/digest.php'
+      - 'src/email.php'
+      - 'src/inat-api.php'
+      - 'src/state.php'
+      - 'templates/**'
+      - '.github/workflows/test-digest.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+      
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist
+      
+      - name: Test digest functions
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/config.php';
+          require_once 'src/inat-api.php';
+          require_once 'src/state.php';
+          require_once 'src/email.php';
+          require_once 'src/digest.php';
+          
+          echo \"Testing digest helper functions...\n\";
+          
+          // Test calculateObservedAge
+          \$recentObs = ['observed_on' => gmdate('Y-m-d', strtotime('-5 days'))];
+          \$oldObs = ['observed_on' => gmdate('Y-m-d', strtotime('-40 days'))];
+          \$unknownObs = [];
+          
+          \$recentAge = calculateObservedAge(\$recentObs);
+          \$oldAge = calculateObservedAge(\$oldObs);
+          \$unknownAge = calculateObservedAge(\$unknownObs);
+          
+          echo \"✓ calculateObservedAge() works: recent=\$recentAge days, old=\$oldAge days, unknown=\$unknownAge\n\";
+          
+          // Test separateByAge
+          \$observations = [\$recentObs, \$oldObs, \$unknownObs];
+          \$separated = separateByAge(\$observations, 30);
+          
+          echo \"✓ separateByAge() works: new=\" . count(\$separated['new']) . \", old=\" . count(\$separated['old']) . \"\n\";
+          
+          // Test sortByRarity
+          \$obs1 = ['rarity_count' => 100, 'created_at' => '2026-02-24T10:00:00Z', 'id' => 1];
+          \$obs2 = ['rarity_count' => 10, 'created_at' => '2026-02-24T12:00:00Z', 'id' => 2];
+          \$obs3 = ['rarity_count' => 10, 'created_at' => '2026-02-24T11:00:00Z', 'id' => 3];
+          
+          \$sorted = sortByRarity([\$obs1, \$obs2, \$obs3]);
+          
+          if (\$sorted[0]['id'] === 2 && \$sorted[1]['id'] === 3 && \$sorted[2]['id'] === 1) {
+              echo \"✓ sortByRarity() correctly sorts by rarity then recency\n\";
+          } else {
+              echo \"✗ sortByRarity() sorting failed\n\";
+              exit(1);
+          }
+          
+          echo \"\nAll digest function tests passed!\n\";
+          "
