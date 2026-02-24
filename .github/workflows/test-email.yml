@@ -1,1 +1,113 @@
-Tool call argument 'initial_content' pruned from message history.
+name: Test Email Functionality
+
+on:
+  push:
+    paths:
+      - 'src/email.php'
+      - 'templates/**'
+      - '.github/workflows/test-email.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist
+        
+      - name: Test email template rendering
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/email.php';
+          
+          echo \"Testing template rendering...\n\";
+          
+          \$data = [
+            'COVERAGE_WINDOW' => 'Feb 17-24, 2026',
+            'LOCATION_SUMMARY' => 'Taipei (25.033, 121.565) - 50km radius',
+            'TAXA_SUMMARY' => 'Reptilia',
+            'OBSERVATIONS' => '<div>Test observation</div>',
+            'OLD_OBSERVATIONS' => ''
+          ];
+          
+          \$html = renderTemplate('templates/digest.html', \$data);
+          
+          if (strpos(\$html, 'Feb 17-24, 2026') !== false) {
+            echo \"✓ Digest template renders correctly\n\";
+          } else {
+            echo \"✗ Digest template rendering failed\n\";
+            exit(1);
+          }
+          
+          \$alertData = [
+            'ALERT_COUNT' => '3',
+            'OBSERVATIONS' => '<div>Test alert</div>'
+          ];
+          
+          \$alertHtml = renderTemplate('templates/alert.html', \$alertData);
+          
+          if (strpos(\$alertHtml, '3 New') !== false) {
+            echo \"✓ Alert template renders correctly\n\";
+          } else {
+            echo \"✗ Alert template rendering failed\n\";
+            exit(1);
+          }
+          "
+          
+      - name: Test email building functions
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/config.php';
+          require_once 'src/email.php';
+          
+          echo \"Testing email building functions...\n\";
+          
+          \$config = loadConfig('config.yaml');
+          
+          \$observations = [
+            [
+              'id' => 123,
+              'taxon' => ['name' => 'Test Species', 'preferred_common_name' => 'Common Test'],
+              'created_at' => '2026-02-24T10:00:00Z',
+              'observed_on' => '2026-02-24',
+              'photos' => [['url' => 'https://example.com/photo.jpg']],
+              'user' => ['login' => 'testuser'],
+              'quality_grade' => 'research',
+              'location' => '25.0,121.5'
+            ]
+          ];
+          
+          \$html = buildDigestEmail(\$observations, [], \$config, '2026-02-17T00:00:00Z', '2026-02-24T00:00:00Z');
+          
+          if (strlen(\$html) > 100 && strpos(\$html, 'Test Species') !== false) {
+            echo \"✓ buildDigestEmail() works correctly\n\";
+          } else {
+            echo \"✗ buildDigestEmail() failed\n\";
+            exit(1);
+          }
+          
+          \$alertHtml = buildAlertEmail(\$observations, \$config);
+          
+          if (strlen(\$alertHtml) > 100 && strpos(\$alertHtml, 'Test Species') !== false) {
+            echo \"✓ buildAlertEmail() works correctly\n\";
+          } else {
+            echo \"✗ buildAlertEmail() failed\n\";
+            exit(1);
+          }
+          "
