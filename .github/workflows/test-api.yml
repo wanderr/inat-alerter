@@ -1,0 +1,117 @@
+name: Test API Client
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist --no-progress
+      
+      - name: Test API - Fetch observations
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/config.php';
+          require_once 'src/inat-api.php';
+          
+          echo \"Testing fetchObservations()...\n\";
+          
+          \$config = loadConfig('config.yaml');
+          
+          // Test with a recent time window (last 7 days)
+          \$now = new DateTime('now', new DateTimeZone('UTC'));
+          \$weekAgo = (clone \$now)->modify('-7 days');
+          
+          \$result = fetchObservations(
+              \$config,
+              \$weekAgo->format('Y-m-d\TH:i:s\Z'),
+              \$now->format('Y-m-d\TH:i:s\Z')
+          );
+          
+          echo \"✓ API request successful\n\";
+          echo \"  Observations fetched: \" . count(\$result['observations']) . \"\n\";
+          echo \"  Total available: {\$result['total_available']}\n\";
+          echo \"  Hit limit: \" . (\$result['hit_limit'] ? 'Yes' : 'No') . \"\n\";
+          
+          if (!empty(\$result['observations'])) {
+              \$obs = \$result['observations'][0];
+              echo \"  Sample observation:\n\";
+              echo \"    ID: {\$obs['id']}\n\";
+              echo \"    Created: {\$obs['created_at']}\n\";
+              echo \"    Taxon: \" . (\$obs['taxon']['name'] ?? 'N/A') . \"\n\";
+              echo \"    Photos: \" . count(\$obs['photos'] ?? []) . \"\n\";
+          }
+          "
+      
+      - name: Test API - Taxon observation count
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/config.php';
+          require_once 'src/inat-api.php';
+          
+          echo \"Testing getTaxonObservationCount()...\n\";
+          
+          \$config = loadConfig('config.yaml');
+          
+          // Test with first configured taxon
+          \$taxonId = \$config['taxa']['include'][0];
+          echo \"  Testing taxon ID: \$taxonId\n\";
+          
+          \$count = getTaxonObservationCount(\$taxonId, \$config);
+          
+          echo \"✓ Rarity count retrieved: \$count\n\";
+          
+          // Test caching - second call should be instant
+          \$count2 = getTaxonObservationCount(\$taxonId, \$config);
+          
+          if (\$count === \$count2) {
+              echo \"✓ Cache working correctly\n\";
+          } else {
+              echo \"✗ Cache failed - got different results\n\";
+              exit(1);
+          }
+          "
+      
+      - name: Test API - Error handling
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/inat-api.php';
+          
+          echo \"Testing error handling...\n\";
+          
+          // Test with invalid URL (should fail gracefully)
+          try {
+              makeApiRequest('https://api.inaturalist.org/v1/invalid_endpoint_12345');
+              echo \"✗ Should have thrown exception for invalid endpoint\n\";
+              exit(1);
+          } catch (Exception \$e) {
+              echo \"✓ Correctly handled invalid endpoint: \" . \$e->getMessage() . \"\n\";
+          }
+          "
