@@ -1,0 +1,65 @@
+name: Test Configuration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-config:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist --no-interaction
+      
+      - name: Copy example config
+        run: cp config.example.yaml config.yaml
+      
+      - name: Test config loading
+        run: |
+          php -r "
+          require_once 'src/config.php';
+          try {
+              \$config = loadConfig('config.yaml');
+              echo \"✓ Configuration loaded successfully\n\";
+              echo \"  Timezone: {\$config['timezone']}\n\";
+              echo \"  Location: {\$config['location']['lat']}, {\$config['location']['lng']}\n\";
+              echo \"  Radius: {\$config['location']['radius']} km\n\";
+              echo \"  Taxa to include: \" . implode(', ', \$config['taxa']['include']) . \"\n\";
+              echo \"✓ All required fields present\n\";
+          } catch (Exception \$e) {
+              echo \"ERROR: {\$e->getMessage()}\n\";
+              exit(1);
+          }
+          "
+      
+      - name: Test invalid config handling
+        run: |
+          # Test with missing config file
+          php -r "require_once 'src/config.php'; loadConfig('nonexistent.yaml');" 2>&1 | grep -q "Configuration file not found"
+          if [ $? -eq 0 ]; then
+            echo "✓ Properly handles missing config file"
+          else
+            echo "✗ Did not handle missing config file correctly"
+            exit 1
+          fi
