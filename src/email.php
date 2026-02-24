@@ -81,7 +81,7 @@ function sendEmail(string $to, string $subject, string $htmlBody, bool $dryRun =
 /**
  * Build digest email HTML
  */
-function buildDigestEmail(array $observations, array $oldObservations, array $config, string $coverageStart, string $coverageEnd): string {
+function buildDigestEmail(array $observations, array $oldObservations, array $config, string $coverageStart, string $coverageEnd, bool $hitLimit = false): string {
     $timezone = new DateTimeZone($config['timezone']);
     
     $start = new DateTime($coverageStart, new DateTimeZone('UTC'));
@@ -90,6 +90,10 @@ function buildDigestEmail(array $observations, array $oldObservations, array $co
     $end->setTimezone($timezone);
     
     $coverageWindow = $start->format('M j, Y H:i') . ' - ' . $end->format('M j, Y H:i T');
+    
+    if ($hitLimit) {
+        $coverageWindow .= '<br><span style="color: #d9534f;">⚠️ API limit reached - results may be incomplete (maximum 200 observations returned)</span>';
+    }
     
     $locationSummary = sprintf(
         "%.4f, %.4f (radius: %d km)",
@@ -155,33 +159,42 @@ function buildObservationsList(array $observations, array $config): string {
         $qualityGrade = ucfirst($obs['quality_grade'] ?? 'unknown');
         
         $location = $obs['location'] ?? '';
-        $obscured = isset($obs['obscured']) && $obs['obscured'] ? '⚠️ Obscured' : '';
+        $rarityCount = $obs['rarity_count'] ?? null;
+        $rarityMethod = $obs['rarity_method'] ?? '';
         
-        $html .= "<div style=\"border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;\">";
-        
-        if ($photoUrl) {
-            $html .= "<img src=\"$photoUrl\" style=\"max-width: 100%; height: auto; border-radius: 3px; margin-bottom: 10px;\" />";
+        $methodLabel = '';
+        if ($rarityMethod === 'radius') {
+            $methodLabel = 'in area';
+        } elseif ($rarityMethod === 'place') {
+            $methodLabel = 'in place';
+        } elseif ($rarityMethod === 'global') {
+            $methodLabel = 'globally';
         }
         
-        $html .= "<h3 style=\"margin: 0 0 5px 0; color: #74ac00;\">";
-        if ($commonName) {
-            $html .= "$commonName";
-        }
-        $html .= "</h3>";
-        $html .= "<p style=\"margin: 0 0 10px 0; font-style: italic; color: #666;\">$scientificName</p>";
+        // Build conditional sections using templates
+        $photoHtml = $photoUrl ? renderTemplate('templates/fragments/photo.html', ['PHOTO_URL' => $photoUrl]) : '';
+        $commonNameHeader = $commonName ? renderTemplate('templates/fragments/common-name.html', ['COMMON_NAME' => $commonName]) : '';
+        $obscuredIndicator = (isset($obs['obscured']) && $obs['obscured']) ? renderTemplate('templates/fragments/obscured.html', []) : '';
+        $locationLine = $location ? renderTemplate('templates/fragments/location.html', ['LOCATION' => $location]) : '';
+        $rarityLine = $rarityCount ? renderTemplate('templates/fragments/rarity.html', ['RARITY_COUNT' => $rarityCount, 'RARITY_METHOD_LABEL' => $methodLabel]) : '';
         
-        $html .= "<p style=\"margin: 5px 0;\"><strong>Created:</strong> $createdStr</p>";
-        $html .= "<p style=\"margin: 5px 0;\"><strong>Observed:</strong> $observedStr $obscured</p>";
-        $html .= "<p style=\"margin: 5px 0;\"><strong>Observer:</strong> <a href=\"$userUrl\">$username</a></p>";
-        $html .= "<p style=\"margin: 5px 0;\"><strong>Quality:</strong> $qualityGrade</p>";
+        // Build template data
+        $data = [
+            'PHOTO' => $photoHtml,
+            'COMMON_NAME_HEADER' => $commonNameHeader,
+            'SCIENTIFIC_NAME' => $scientificName,
+            'CREATED_AT' => $createdStr,
+            'OBSERVED_ON' => $observedStr,
+            'OBSCURED_INDICATOR' => $obscuredIndicator,
+            'USERNAME' => $username,
+            'USER_URL' => $userUrl,
+            'QUALITY_GRADE' => $qualityGrade,
+            'LOCATION_LINE' => $locationLine,
+            'RARITY_LINE' => $rarityLine,
+            'OBS_URL' => $obsUrl
+        ];
         
-        if ($location) {
-            $html .= "<p style=\"margin: 5px 0;\"><strong>Location:</strong> $location</p>";
-        }
-        
-        $html .= "<p style=\"margin: 10px 0 0 0;\"><a href=\"$obsUrl\" style=\"color: #74ac00; text-decoration: none; font-weight: bold;\">View on iNaturalist →</a></p>";
-        
-        $html .= "</div>";
+        $html .= renderTemplate('templates/observation-card.html', $data);
     }
     
     return $html;
