@@ -1,0 +1,5 @@
+config.yaml
+vendor/
+state.json
+.env
+composer.lock

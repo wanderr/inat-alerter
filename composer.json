@@ -1,0 +1,19 @@
+{
+    "name": "inat-alerter/inat-alerter",
+    "description": "Weekly digests and hourly alerts for iNaturalist observations",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "phpmailer/phpmailer": "^6.9",
+        "mustangostang/spyc": "^0.6"
+    },
+    "autoload": {
+        "files": [
+            "src/config.php"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

@@ -1,0 +1,78 @@
+# iNaturalist Alerter Configuration
+# Copy this file to config.yaml and customize for your needs
+
+# IANA timezone for all date/time displays in emails
+# Examples: America/New_York, Europe/London, Asia/Taipei
+timezone: "Asia/Taipei"
+
+# Geographic scope
+location:
+  # Center point for observation radius
+  lat: 25.0330
+  lng: 121.5654
+  # Radius in kilometers
+  radius: 50
+
+# Taxa to monitor
+# Specify taxon_ids to include (descendants are automatically included)
+# Use https://www.inaturalist.org/taxa/search to find taxon IDs
+taxa:
+  # List of taxon IDs to monitor
+  # Example: [26036] for snakes, [47178] for birds, [47126] for flowering plants
+  include:
+    - 26036
+  
+  # Optional: taxon IDs to explicitly exclude (useful to filter out descendants)
+  # Example: exclude a common species from an otherwise interesting genus
+  exclude: []
+
+# Watchlist for hourly alerts
+# These can be completely independent from the main taxa list
+watchlist:
+  # Taxon IDs that trigger immediate alerts
+  # Leave empty to disable alerts
+  taxa_ids: []
+
+# Rarity calculation method for sorting digest observations
+rarity:
+  # Method: "radius" (within configured radius), "place" (within iNat place), or "global"
+  method: "radius"
+  
+  # Optional: iNaturalist place ID (only used if method is "place")
+  # Find place IDs at https://www.inaturalist.org/places
+  # Example: 7887 for Taiwan
+  place_id: null
+
+# Define when observations are considered "old"
+# Old observations appear in digest but grouped separately
+# Old observations do NOT trigger alerts
+old_observation:
+  # Number of days - observations older than this are considered "old"
+  days_old_threshold: 30
+
+# Weekly digest schedule
+digest:
+  enabled: true
+  # Day of week: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  day_of_week: 0
+  # Hour in 24-hour format (local time based on timezone above)
+  local_hour: 8
+
+# Hourly alerts
+alerts:
+  enabled: true
+
+# State management
+state:
+  # How long to retain state artifacts in GitHub Actions (days)
+  artifact_retention_days: 14
+
+# Email configuration (do NOT put credentials here - use GitHub Secrets)
+# Supported secrets (set in GitHub repository settings):
+#   SMTP_HOST - SMTP server hostname
+#   SMTP_PORT - SMTP server port (usually 587 for TLS, 465 for SSL)
+#   SMTP_USERNAME - SMTP username
+#   SMTP_PASSWORD - SMTP password
+#   SMTP_FROM_EMAIL - Sender email address
+#   SMTP_FROM_NAME - Sender display name (optional)
+#   EMAIL_RECIPIENTS - Comma-separated list of recipient email addresses
