@@ -1,0 +1,143 @@
+name: Test State Management
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-state:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist
+        
+      - name: Test default state loading
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/state.php';
+          
+          echo \"Testing loadState() with no file...\n\";
+          \$state = loadState();
+          
+          if (\$state['last_digest_run'] === null && \$state['last_alert_run'] === null) {
+              echo \"✓ Default state loaded correctly\n\";
+          } else {
+              echo \"✗ Default state incorrect\n\";
+              exit(1);
+          }
+          "
+          
+      - name: Test state save and load
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/state.php';
+          
+          echo \"Testing saveState() and loadState()...\n\";
+          
+          \$state = getDefaultState();
+          updateLastRunTime(\$state, 'digest', '2026-02-24T14:00:00Z');
+          updateLastRunTime(\$state, 'alert', '2026-02-24T13:00:00Z');
+          markObservationsProcessed(\$state, 'digest', [123, 456], '2026-02-24T14:00:00Z');
+          markObservationsProcessed(\$state, 'alert', [789], '2026-02-24T13:00:00Z');
+          
+          saveState(\$state);
+          
+          \$loaded = loadState();
+          
+          if (\$loaded['last_digest_run'] === '2026-02-24T14:00:00Z') {
+              echo \"✓ Digest run time saved/loaded correctly\n\";
+          } else {
+              echo \"✗ Digest run time incorrect\n\";
+              exit(1);
+          }
+          
+          if (hasBeenProcessed(\$loaded, 'digest', 123)) {
+              echo \"✓ Digest deduplication working\n\";
+          } else {
+              echo \"✗ Digest deduplication failed\n\";
+              exit(1);
+          }
+          
+          if (hasBeenProcessed(\$loaded, 'alert', 789)) {
+              echo \"✓ Alert deduplication working\n\";
+          } else {
+              echo \"✗ Alert deduplication failed\n\";
+              exit(1);
+          }
+          "
+          
+      - name: Test observation ID pruning
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/state.php';
+          
+          echo \"Testing pruneOldObservationIds()...\n\";
+          
+          \$now = time();
+          \$old = date('c', \$now - (35 * 86400)); // 35 days ago
+          \$recent = date('c', \$now - (5 * 86400)); // 5 days ago
+          
+          \$ids = [
+              '111' => \$old,
+              '222' => \$recent,
+              '333' => date('c', \$now),
+          ];
+          
+          \$pruned = pruneOldObservationIds(\$ids, 30);
+          
+          if (!isset(\$pruned['111']) && isset(\$pruned['222']) && isset(\$pruned['333'])) {
+              echo \"✓ Old IDs pruned correctly (kept 2/3)\n\";
+          } else {
+              echo \"✗ Pruning failed\n\";
+              var_dump(\$pruned);
+              exit(1);
+          }
+          "
+          
+      - name: Test getLastRunTime
+        run: |
+          php -r "
+          require_once 'vendor/autoload.php';
+          require_once 'src/state.php';
+          
+          echo \"Testing getLastRunTime()...\n\";
+          
+          \$state = getDefaultState();
+          updateLastRunTime(\$state, 'digest', '2026-02-24T14:00:00Z');
+          
+          \$time = getLastRunTime(\$state, 'digest');
+          if (\$time === '2026-02-24T14:00:00Z') {
+              echo \"✓ getLastRunTime() working correctly\n\";
+          } else {
+              echo \"✗ getLastRunTime() failed\n\";
+              exit(1);
+          }
+          
+          \$nullTime = getLastRunTime(\$state, 'alert');
+          if (\$nullTime === null) {
+              echo \"✓ Returns null for unset run time\n\";
+          } else {
+              echo \"✗ Should return null for unset run time\n\";
+              exit(1);
+          }
+          "
