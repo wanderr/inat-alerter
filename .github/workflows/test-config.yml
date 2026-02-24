@@ -38,6 +38,7 @@ jobs:
       - name: Test config loading
         run: |
           php -r "
+          require_once 'vendor/autoload.php';
           require_once 'src/config.php';
           try {
               \$config = loadConfig('config.yaml');
@@ -56,7 +57,7 @@ jobs:
       - name: Test invalid config handling
         run: |
           # Test with missing config file
-          php -r "require_once 'src/config.php'; loadConfig('nonexistent.yaml');" 2>&1 | grep -q "Configuration file not found"
+          php -r "require_once 'vendor/autoload.php'; require_once 'src/config.php'; loadConfig('nonexistent.yaml');" 2>&1 | grep -q "Configuration file not found"
           if [ $? -eq 0 ]; then
             echo "✓ Properly handles missing config file"
           else
