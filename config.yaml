@@ -1,0 +1,34 @@
+# Development configuration
+timezone: "Asia/Taipei"
+
+location:
+  lat: 25.0330
+  lng: 121.5654
+  radius: 50
+
+taxa:
+  include:
+    - 26036  # Snakes
+  exclude: []
+
+watchlist:
+  taxa_ids:
+    - 48460  # Example: some specific species
+
+rarity:
+  method: "radius"
+  place_id: null
+
+old_observation:
+  days_old_threshold: 30
+
+digest:
+  enabled: true
+  day_of_week: 0
+  local_hour: 8
+
+alerts:
+  enabled: true
+
+state:
+  artifact_retention_days: 14
